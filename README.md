@@ -107,6 +107,8 @@
      - `google-services.json` (Android)
      - `GoogleService-Info.plist` (iOS)
    - Place them in the appropriate directories
+   - **Important**: Run `flutterfire configure` to generate `firebase_options.dart`
+   - See [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for detailed instructions
 
 4. **API Keys Setup**
    - Get Aviation Stack API key
