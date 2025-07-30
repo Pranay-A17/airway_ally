@@ -100,6 +100,13 @@
    flutter pub get
    ```
 
+3. **Set up environment variables** (recommended for production)
+   ```bash
+   ./setup_env.sh
+   # Edit .env file with your API keys
+   ```
+   ```
+
 3. **Firebase Setup**
    - Create a Firebase project
    - Add iOS and Android apps
@@ -199,6 +206,17 @@ flutter build web --release
 - **Encryption**: All data encrypted in transit and at rest
 - **Authentication**: Required for all operations
 - **User Isolation**: Users can only access their own data
+- **Environment Variables**: API keys managed securely
+- **Personal Data Protection**: No personal information in codebase
+
+### 🔐 Security Setup
+For production deployments, set up environment variables:
+```bash
+./setup_env.sh
+# Edit .env file with your API keys
+```
+
+See [SECURITY.md](SECURITY.md) for detailed security guidelines.
 
 ## 🌐 Real-time Features
 

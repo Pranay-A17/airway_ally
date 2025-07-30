@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../utils/logger.dart';
+import '../config/env_config.dart';
 
 class FlightApiService {
   // Aviation Stack API (free tier)
   static const String _baseUrl = 'http://api.aviationstack.com/v1';
-  static const String _apiKey = 'ce04d84a5463440fe816b2aefc342ec';
+  static String get _apiKey => EnvConfig.aviationStackApiKey;
 
   /// Get real-time flight data
   Future<Map<String, dynamic>> getFlightData(String flightNumber) async {

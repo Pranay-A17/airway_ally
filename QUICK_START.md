@@ -5,7 +5,7 @@
 ### **Important:** Always run commands from the `airway_ally` directory!
 
 ```bash
-cd "/Users/pranaydeeprakam/Airway Ally/airway_ally"
+cd "path/to/your/airway_ally"
 ```
 
 ## 🎯 Quick Commands
@@ -60,8 +60,8 @@ flutter run -d android
 ### **If you get "No pubspec.yaml found":**
 ```bash
 # Make sure you're in the correct directory
-cd "/Users/pranaydeeprakam/Airway Ally/airway_ally"
-pwd  # Should show: /Users/pranaydeeprakam/Airway Ally/airway_ally
+cd "path/to/your/airway_ally"
+pwd  # Should show: path/to/your/airway_ally
 ```
 
 ### **If app doesn't start:**

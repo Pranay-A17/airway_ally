@@ -16,7 +16,18 @@ while ! flutter devices | grep -q "android"; do
 done
 
 echo "✅ Android emulator ready!"
-echo "📱 Running Airway Ally on Android..."
+
+# Get the Android device ID
+ANDROID_DEVICE=$(flutter devices | grep "android" | head -1 | awk '{print $1}' | sed 's/•//g' | xargs)
+echo "📱 Found Android device: $ANDROID_DEVICE"
+
+if [ -z "$ANDROID_DEVICE" ]; then
+    echo "❌ No Android device found. Available devices:"
+    flutter devices
+    exit 1
+fi
+
+echo "📱 Running Airway Ally on Android device: $ANDROID_DEVICE..."
 
 # Run the app
-flutter run -d android 
+flutter run -d "$ANDROID_DEVICE" 
