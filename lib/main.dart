@@ -64,7 +64,8 @@ void main() async {
       await NotificationService().initialize();
       Logger.success('Notification service initialized successfully');
     } catch (e) {
-      Logger.warning('Notification service failed to initialize: $e');
+      Logger.warning('Notification service failed to initialize (non-critical): $e');
+      // Continue app startup - notifications are not critical for core functionality
     }
     
     Logger.info('Running app...');

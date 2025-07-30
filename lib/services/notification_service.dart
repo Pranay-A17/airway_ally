@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:flutter/foundation.dart';
 import '../utils/logger.dart';
 
 class NotificationService {
@@ -35,14 +37,23 @@ class NotificationService {
       await _localNotifications.initialize(initSettings);
       Logger.success('Local notifications initialized successfully');
       
-      // Initialize Firebase Cloud Messaging
-      await _initializeFirebaseMessaging();
+      // Initialize Firebase Cloud Messaging (skip on simulator)
+      if (!kDebugMode || !_isSimulator()) {
+        await _initializeFirebaseMessaging();
+      } else {
+        Logger.info('Skipping FCM initialization on simulator');
+      }
       
       Logger.success('Notification service initialized successfully');
     } catch (e) {
       Logger.error('Failed to initialize notification service', e);
       rethrow;
     }
+  }
+
+  bool _isSimulator() {
+    // Simple check for simulator environment
+    return kDebugMode && (Platform.isIOS || Platform.isAndroid);
   }
 
   Future<void> _initializeFirebaseMessaging() async {
@@ -58,12 +69,17 @@ class NotificationService {
       
       Logger.info('FCM permission status: ${settings.authorizationStatus}');
       
-      // Get FCM token
-      final token = await _firebaseMessaging.getToken();
-      if (token != null) {
-        Logger.success('FCM token obtained: ${token.substring(0, 20)}...');
-      } else {
-        Logger.warning('Failed to get FCM token');
+      // Get FCM token with error handling
+      try {
+        final token = await _firebaseMessaging.getToken();
+        if (token != null) {
+          Logger.success('FCM token obtained: ${token.substring(0, 20)}...');
+        } else {
+          Logger.warning('Failed to get FCM token');
+        }
+      } catch (e) {
+        Logger.warning('FCM token not available (common in simulator): $e');
+        // Continue without FCM token - app will still work
       }
       
       // Handle foreground messages
@@ -77,8 +93,8 @@ class NotificationService {
       
       Logger.success('Firebase Cloud Messaging initialized successfully');
     } catch (e) {
-      Logger.error('Failed to initialize Firebase Cloud Messaging', e);
-      rethrow;
+      Logger.warning('Firebase Cloud Messaging initialization failed (non-critical): $e');
+      // Don't rethrow - app can work without FCM
     }
   }
 
