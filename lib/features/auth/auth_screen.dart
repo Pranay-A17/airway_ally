@@ -187,16 +187,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _errorMessage = null;
     });
 
+    // Store context before async operation
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     try {
       if (_isLogin) {
         // Sign in with Firebase auth
-        print('Attempting login with: ${_emailController.text.trim()}');
-        
         await ref.read(authProvider.notifier).signIn(
           _emailController.text.trim(),
           _passwordController.text.trim(),
         ).timeout(const Duration(seconds: 30));
-        _showSuccess('Signed in successfully!');
+        _showSuccess('Signed in successfully!', scaffoldMessenger, navigator);
       } else {
         // Register with timeout
         await ref.read(authProvider.notifier).signUp(
@@ -205,7 +207,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           _nameController.text.trim(),
           _selectedRole,
         ).timeout(const Duration(seconds: 30));
-        _showSuccess('Account created successfully!');
+        _showSuccess('Account created successfully!', scaffoldMessenger, navigator);
       }
     } catch (e) {
       setState(() {
@@ -240,13 +242,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+  void _showSuccess(String message, ScaffoldMessengerState scaffoldMessenger, NavigatorState navigator) {
+    scaffoldMessenger.showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.green),
     );
     // Navigate to main dashboard after a short delay
     Future.delayed(const Duration(milliseconds: 500), () {
-      Navigator.of(context).pushReplacement(
+      navigator.pushReplacement(
         MaterialPageRoute(builder: (context) => const MainDashboard()),
       );
     });

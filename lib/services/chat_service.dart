@@ -1,39 +1,37 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../utils/logger.dart';
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Get real-time conversations for current user
   Stream<List<Map<String, dynamic>>> getUserConversations() {
-    final user = _auth.currentUser;
-    if (user == null) return Stream.value([]);
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      Logger.warning('No authenticated user found for chat conversations');
+      return Stream.value([]);
+    }
 
     return _firestore
         .collection('conversations')
-        .where('participants', arrayContains: user.uid)
+        .where('participants', arrayContains: currentUser.uid)
         .orderBy('lastMessageTime', descending: true)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          'name': data['name'] ?? 'Unknown',
-          'last': data['lastMessage'] ?? '',
-          'unread': data['unreadCount'] ?? 0,
-          'time': _formatTime((data['lastMessageTime'] as Timestamp?)?.toDate()),
-          'avatar': data['avatar'] ?? 'U',
-          'isOnline': data['isOnline'] ?? false,
-          'participants': data['participants'] ?? [],
-          'isRealData': true,
-        };
-      }).toList();
-    });
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              return {
+                'id': doc.id,
+                'name': data['name'] ?? 'Unknown',
+                'last': data['lastMessage'] ?? 'No messages',
+                'time': _formatTime(data['lastMessageTime'] as Timestamp?),
+                'unread': data['unreadCount'] ?? 0,
+                'isOnline': data['isOnline'] ?? false,
+                'avatar': data['avatar'] ?? 'U',
+              };
+            }).toList());
   }
 
-  // Get real-time messages for a conversation
   Stream<List<Map<String, dynamic>>> getConversationMessages(String conversationId) {
     return _firestore
         .collection('conversations')
@@ -41,31 +39,31 @@ class ChatService {
         .collection('messages')
         .orderBy('timestamp', descending: false)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          'text': data['text'] ?? '',
-          'senderId': data['senderId'] ?? '',
-          'senderName': data['senderName'] ?? '',
-          'timestamp': (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          'isRead': data['isRead'] ?? false,
-          'isRealData': true,
-        };
-      }).toList();
-    });
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              return {
+                'id': doc.id,
+                'text': data['text'] ?? '',
+                'senderId': data['senderId'] ?? '',
+                'timestamp': (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+                'isRead': data['isRead'] ?? false,
+              };
+            }).toList());
   }
 
-  // Send a message
   Future<void> sendMessage({
     required String conversationId,
     required String text,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) throw Exception('User not authenticated');
-
     try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        Logger.error('No authenticated user found for sending message');
+        throw Exception('User not authenticated');
+      }
+
+      Logger.info('Sending message to conversation: $conversationId');
+
       // Add message to conversation
       await _firestore
           .collection('conversations')
@@ -73,86 +71,87 @@ class ChatService {
           .collection('messages')
           .add({
         'text': text,
-        'senderId': user.uid,
-        'senderName': user.displayName ?? user.email ?? 'Unknown',
-        'timestamp': Timestamp.now(),
+        'senderId': currentUser.uid,
+        'timestamp': FieldValue.serverTimestamp(),
         'isRead': false,
       });
 
-      // Update conversation with last message
-      await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .update({
+      // Update conversation metadata
+      await _firestore.collection('conversations').doc(conversationId).update({
         'lastMessage': text,
-        'lastMessageTime': Timestamp.now(),
-        'lastSenderId': user.uid,
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'unreadCount': FieldValue.increment(1),
       });
+
+      Logger.success('Message sent successfully');
     } catch (e) {
-      throw Exception('Failed to send message: $e');
+      Logger.error('Failed to send message', e);
+      rethrow;
     }
   }
 
-  // Create a new conversation
   Future<String> createConversation({
     required String name,
     required List<String> participantIds,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) throw Exception('User not authenticated');
-
     try {
+      Logger.info('Creating new conversation: $name');
+
       final docRef = await _firestore.collection('conversations').add({
         'name': name,
         'participants': participantIds,
-        'createdBy': user.uid,
-        'createdAt': Timestamp.now(),
+        'createdAt': FieldValue.serverTimestamp(),
         'lastMessage': '',
-        'lastMessageTime': Timestamp.now(),
+        'lastMessageTime': FieldValue.serverTimestamp(),
         'unreadCount': 0,
-        'avatar': name.isNotEmpty ? name[0].toUpperCase() : 'C',
-        'isOnline': false,
       });
 
+      Logger.success('Conversation created successfully: ${docRef.id}');
       return docRef.id;
     } catch (e) {
-      throw Exception('Failed to create conversation: $e');
+      Logger.error('Failed to create conversation', e);
+      rethrow;
     }
   }
 
-  // Mark messages as read
   Future<void> markMessagesAsRead(String conversationId) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
     try {
-      // Get unread messages
-      final unreadMessages = await _firestore
+      Logger.info('Marking messages as read for conversation: $conversationId');
+
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        Logger.warning('No authenticated user found for marking messages as read');
+        return;
+      }
+
+      // Mark all unread messages as read
+      final messagesQuery = await _firestore
           .collection('conversations')
           .doc(conversationId)
           .collection('messages')
-          .where('senderId', isNotEqualTo: user.uid)
           .where('isRead', isEqualTo: false)
+          .where('senderId', isNotEqualTo: currentUser.uid)
           .get();
 
-      // Mark them as read
       final batch = _firestore.batch();
-      for (final doc in unreadMessages.docs) {
+      for (final doc in messagesQuery.docs) {
         batch.update(doc.reference, {'isRead': true});
       }
+
       await batch.commit();
 
-      // Update conversation unread count
-      await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .update({'unreadCount': 0});
+      // Reset unread count
+      await _firestore.collection('conversations').doc(conversationId).update({
+        'unreadCount': 0,
+      });
+
+      Logger.success('Messages marked as read successfully');
     } catch (e) {
-      print('Failed to mark messages as read: $e');
+      Logger.error('Failed to mark messages as read', e);
+      rethrow;
     }
   }
 
-  // Get user's online status
   Stream<bool> getUserOnlineStatus(String userId) {
     return _firestore
         .collection('users')
@@ -161,110 +160,105 @@ class ChatService {
         .map((doc) => doc.data()?['isOnline'] ?? false);
   }
 
-  // Update user's online status
   Future<void> updateOnlineStatus(bool isOnline) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
     try {
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .update({
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        Logger.warning('No authenticated user found for updating online status');
+        return;
+      }
+
+      Logger.info('Updating online status: $isOnline');
+
+      await _firestore.collection('users').doc(currentUser.uid).update({
         'isOnline': isOnline,
-        'lastSeen': Timestamp.now(),
+        'lastActive': FieldValue.serverTimestamp(),
       });
+
+      Logger.success('Online status updated successfully');
     } catch (e) {
-      print('Failed to update online status: $e');
+      Logger.error('Failed to update online status', e);
+      rethrow;
     }
   }
 
-  // Search conversations
   Stream<List<Map<String, dynamic>>> searchConversations(String query) {
-    final user = _auth.currentUser;
-    if (user == null) return Stream.value([]);
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      Logger.warning('No authenticated user found for searching conversations');
+      return Stream.value([]);
+    }
 
     return _firestore
         .collection('conversations')
-        .where('participants', arrayContains: user.uid)
-        .orderBy('lastMessageTime', descending: true)
+        .where('participants', arrayContains: currentUser.uid)
+        .where('name', isGreaterThanOrEqualTo: query)
+        .where('name', isLessThan: '$query\uf8ff')
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) {
-            final data = doc.data();
-            return {
-              'id': doc.id,
-              'name': data['name'] ?? 'Unknown',
-              'last': data['lastMessage'] ?? '',
-              'unread': data['unreadCount'] ?? 0,
-              'time': _formatTime((data['lastMessageTime'] as Timestamp?)?.toDate()),
-              'avatar': data['avatar'] ?? 'U',
-              'isOnline': data['isOnline'] ?? false,
-              'participants': data['participants'] ?? [],
-              'isRealData': true,
-            };
-          })
-          .where((conv) =>
-              conv['name'].toLowerCase().contains(query.toLowerCase()) ||
-              conv['last'].toLowerCase().contains(query.toLowerCase()))
-          .toList();
-    });
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              return {
+                'id': doc.id,
+                'name': data['name'] ?? 'Unknown',
+                'last': data['lastMessage'] ?? 'No messages',
+                'time': _formatTime(data['lastMessageTime'] as Timestamp?),
+                'unread': data['unreadCount'] ?? 0,
+                'isOnline': data['isOnline'] ?? false,
+                'avatar': data['avatar'] ?? 'U',
+              };
+            }).toList());
   }
 
-  // Get conversation participants
   Future<List<Map<String, dynamic>>> getConversationParticipants(String conversationId) async {
     try {
-      final doc = await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .get();
+      Logger.info('Getting participants for conversation: $conversationId');
 
-      if (!doc.exists) return [];
+      final doc = await _firestore.collection('conversations').doc(conversationId).get();
+      if (!doc.exists) {
+        Logger.warning('Conversation not found: $conversationId');
+        return [];
+      }
 
-      final data = doc.data()!;
-      final participantIds = List<String>.from(data['participants'] ?? []);
-
+      final participantIds = List<String>.from(doc.data()?['participants'] ?? []);
       final participants = <Map<String, dynamic>>[];
+
       for (final userId in participantIds) {
         final userDoc = await _firestore.collection('users').doc(userId).get();
         if (userDoc.exists) {
           final userData = userDoc.data()!;
           participants.add({
             'id': userId,
-            'name': userData['name'] ?? userData['email'] ?? 'Unknown',
-            'avatar': userData['name']?.isNotEmpty == true 
-                ? userData['name'][0].toUpperCase() 
-                : 'U',
+            'name': userData['name'] ?? 'Unknown',
+            'email': userData['email'] ?? '',
             'isOnline': userData['isOnline'] ?? false,
+            'avatar': userData['avatar'] ?? 'U',
           });
         }
       }
 
+      Logger.success('Retrieved ${participants.length} participants');
       return participants;
     } catch (e) {
-      print('Failed to get conversation participants: $e');
-      return [];
+      Logger.error('Failed to get conversation participants', e);
+      rethrow;
     }
   }
 
-  // Format time for display
-  String _formatTime(DateTime? time) {
-    if (time == null) return 'Unknown';
-
+  String _formatTime(Timestamp? timestamp) {
+    if (timestamp == null) return '';
+    
     final now = DateTime.now();
-    final difference = now.difference(time);
+    final messageTime = timestamp.toDate();
+    final difference = now.difference(messageTime);
 
     if (difference.inMinutes < 1) {
       return 'Just now';
     } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} min ago';
+      return '${difference.inMinutes}m ago';
     } else if (difference.inHours < 24) {
-      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
+      return '${difference.inHours}h ago';
     } else {
-      return '${time.day}/${time.month}/${time.year}';
+      return '${messageTime.day}/${messageTime.month}/${messageTime.year}';
     }
   }
 } 

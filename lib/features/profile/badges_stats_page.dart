@@ -246,7 +246,7 @@ class _BadgesStatsPageState extends ConsumerState<BadgesStatsPage>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _getRarityColor(badge['rarity'] as String).withOpacity(0.1),
+                  color: _getRarityColor(badge['rarity'] as String).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -307,7 +307,7 @@ class _BadgesStatsPageState extends ConsumerState<BadgesStatsPage>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: _getRarityColor(badge['rarity'] as String).withOpacity(0.1),
+                color: _getRarityColor(badge['rarity'] as String).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(

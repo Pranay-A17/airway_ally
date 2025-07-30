@@ -1,140 +1,148 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../utils/logger.dart';
 
 final firestoreServiceProvider = Provider<FirestoreService>((ref) {
   return FirestoreService();
 });
 
-final authProvider = StateNotifierProvider<AuthNotifier, AsyncValue<User?>>((ref) {
-  return AuthNotifier(FirebaseAuth.instance, ref.read(firestoreServiceProvider));
+final authProvider = StateNotifierProvider<AuthNotifier, AsyncValue<UserModel?>>((ref) {
+  return AuthNotifier(ref.read(firestoreServiceProvider));
 });
 
 final currentUserProvider = StreamProvider<UserModel?>((ref) {
   return ref.watch(authProvider).when(
     data: (user) {
       if (user != null) {
-        print('Auth user found: ${user.uid}');
-        return ref.read(firestoreServiceProvider).getUserStream(user.uid);
+        Logger.info('Auth user found: ${user.id}');
+        return Stream.value(user);
       }
-      print('No auth user found');
+      Logger.info('No auth user found');
       return Stream.value(null);
     },
     loading: () {
-      print('Auth loading...');
+      Logger.info('Auth loading...');
       return Stream.value(null);
     },
     error: (error, stack) {
-      print('Auth error: $error');
+      Logger.error('Auth error: $error');
       return Stream.value(null);
     },
   );
 });
 
-class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
-  final FirebaseAuth _auth;
+class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirestoreService _firestoreService;
 
-  AuthNotifier(this._auth, this._firestoreService) : super(const AsyncValue.loading()) {
-    // Delay the initialization to ensure Firebase is ready
-    Future.microtask(() {
-      try {
-        _auth.authStateChanges().listen((user) {
-          state = AsyncValue.data(user);
-        });
-      } catch (e) {
-        state = AsyncValue.error(e, StackTrace.current);
-      }
-    });
+  AuthNotifier(this._firestoreService) : super(const AsyncValue.loading()) {
+    _auth.authStateChanges().listen(_onAuthStateChanged);
   }
 
-  Future<void> signUp(String email, String password, String name, String role) async {
-    try {
-      state = const AsyncValue.loading();
-      print('Creating Firebase Auth user...');
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+  void _onAuthStateChanged(User? firebaseUser) {
+    Logger.info('Auth state changed: ${firebaseUser?.email ?? 'No user'}');
+    
+    if (firebaseUser == null) {
+      Logger.info('User signed out');
+      state = const AsyncValue.data(null);
+      return;
+    }
 
-      if (userCredential.user != null) {
-        print('Firebase Auth user created: ${userCredential.user!.uid}');
-        final user = UserModel(
-          id: userCredential.user!.uid,
-          email: email,
-          name: name,
-          role: role,
+    Logger.info('User signed in: ${firebaseUser.email}');
+    _loadUserData(firebaseUser.uid);
+  }
+
+  Future<void> _loadUserData(String uid) async {
+    try {
+      Logger.info('Loading user data for UID: $uid');
+      state = const AsyncValue.loading();
+      
+      final userDoc = await _firestore.collection('users').doc(uid).get();
+      
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        final user = UserModel.fromMap(userData, uid);
+        Logger.success('User data loaded successfully');
+        state = AsyncValue.data(user);
+      } else {
+        Logger.warning('User document not found, creating new user');
+        // Create a new user document
+        final newUser = UserModel(
+          id: uid,
+          email: _auth.currentUser?.email ?? '',
+          name: _auth.currentUser?.displayName ?? _auth.currentUser?.email?.split('@')[0] ?? 'User',
+          role: 'seeker', // Default role
           createdAt: DateTime.now(),
           lastActive: DateTime.now(),
         );
-
-        try {
-          print('Creating Firestore user profile...');
-          await _firestoreService.createUser(user)
-              .timeout(const Duration(seconds: 10));
-          print('Firestore user profile created successfully');
-        } catch (firestoreError) {
-          print('Firestore error during signup: $firestoreError');
-          // Don't fail the entire signup if Firestore is down
-          // The user can still sign in and create profile later
-          print('Continuing with signup despite Firestore error');
-        }
+        
+        await _firestoreService.createUser(newUser);
+        Logger.success('New user created successfully');
+        state = AsyncValue.data(newUser);
       }
-      
-      print('Sign up completed successfully');
     } catch (e) {
-      print('Signup error: $e');
+      Logger.error('Failed to load user data', e);
       state = AsyncValue.error(e, StackTrace.current);
-      rethrow;
     }
   }
 
   Future<void> signIn(String email, String password) async {
     try {
+      Logger.info('Attempting sign in for: $email');
       state = const AsyncValue.loading();
-      print('Attempting to sign in with email: $email');
       
-      // Sign in with Firebase Auth
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
-      print('Firebase Auth sign in successful');
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      ).timeout(const Duration(seconds: 10));
       
-      // Check if user profile exists in Firestore, if not create a basic one
-      final user = _auth.currentUser;
-      if (user != null) {
-        print('Checking if user profile exists for: ${user.uid}');
-        try {
-          // Add timeout to Firestore operations
-          final existingUser = await _firestoreService.getUser(user.uid)
-              .timeout(const Duration(seconds: 10));
-          
-          if (existingUser == null) {
-            print('Creating new user profile for: ${user.uid}');
-            // Create a basic user profile if it doesn't exist
-            final newUser = UserModel(
-              id: user.uid,
-              email: email,
-              name: user.displayName ?? email.split('@')[0],
-              role: 'seeker', // Default role
-              createdAt: DateTime.now(),
-              lastActive: DateTime.now(),
-            );
-            await _firestoreService.createUser(newUser)
-                .timeout(const Duration(seconds: 10));
-            print('User profile created successfully');
-          } else {
-            print('User profile already exists: ${existingUser.name}');
-          }
-        } catch (firestoreError) {
-          print('Firestore error during sign in: $firestoreError');
-          // Don't fail the sign in if Firestore is down
-          print('Continuing with sign in despite Firestore error');
-        }
-      }
+      Logger.success('Sign in successful for: ${userCredential.user?.email}');
       
-      print('Sign in completed successfully');
+      // User data will be loaded by _onAuthStateChanged
     } catch (e) {
-      print('Sign in error: $e');
+      Logger.error('Sign in failed', e);
+      state = AsyncValue.error(e, StackTrace.current);
+      rethrow;
+    }
+  }
+
+  Future<void> signUp(String email, String password, String name, String role) async {
+    try {
+      Logger.info('Attempting sign up for: $email');
+      state = const AsyncValue.loading();
+      
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      ).timeout(const Duration(seconds: 10));
+      
+      Logger.info('Firebase user created, updating display name');
+      
+      // Update display name
+      await userCredential.user?.updateDisplayName(name);
+      
+      Logger.info('Creating user document in Firestore');
+      
+      // Create user document in Firestore
+      final newUser = UserModel(
+        id: userCredential.user!.uid,
+        email: email,
+        name: name,
+        role: role,
+        createdAt: DateTime.now(),
+        lastActive: DateTime.now(),
+      );
+      
+      await _firestoreService.createUser(newUser);
+      Logger.success('Sign up successful for: $email');
+      
+      // User data will be loaded by _onAuthStateChanged
+    } catch (e) {
+      Logger.error('Sign up failed', e);
       state = AsyncValue.error(e, StackTrace.current);
       rethrow;
     }
@@ -142,23 +150,27 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
   Future<void> signOut() async {
     try {
-      print('Signing out user...');
+      Logger.info('Signing out user');
       await _auth.signOut();
-      print('User signed out successfully');
+      Logger.success('Sign out successful');
     } catch (e) {
-      print('Sign out error: $e');
-      state = AsyncValue.error(e, StackTrace.current);
+      Logger.error('Sign out failed', e);
+      rethrow;
     }
   }
 
-  Future<void> updateUserProfile(UserModel user) async {
+  Future<void> updateUserProfile(UserModel updatedUser) async {
     try {
-      print('Calling FirestoreService.updateUser for user: ${user.id}');
-      await _firestoreService.updateUser(user);
-      print('Profile update complete for user: ${user.id}');
+      Logger.info('Updating user profile for: ${updatedUser.email}');
+      await _firestoreService.updateUser(updatedUser);
+      Logger.success('User profile updated successfully');
+      
+      // Reload user data
+      if (_auth.currentUser != null) {
+        await _loadUserData(_auth.currentUser!.uid);
+      }
     } catch (e) {
-      print('Error updating user profile: $e');
-      state = AsyncValue.error(e, StackTrace.current);
+      Logger.error('Failed to update user profile', e);
       rethrow;
     }
   }

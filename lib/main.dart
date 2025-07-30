@@ -5,6 +5,7 @@ import 'firebase_options.dart';
 import 'features/auth/auth_screen.dart';
 import 'services/notification_service.dart';
 import 'core/app_theme.dart';
+import 'utils/logger.dart';
 
 class TestScreen extends StatelessWidget {
   const TestScreen({super.key});
@@ -40,40 +41,40 @@ class TestScreen extends StatelessWidget {
 
 void main() async {
   try {
-    print('Starting Airway Ally app...');
+    Logger.info('Starting Airway Ally app...');
     WidgetsFlutterBinding.ensureInitialized();
     
-    print('Initializing Firebase...');
+    Logger.info('Initializing Firebase...');
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-      print('Firebase initialized successfully');
+      Logger.success('Firebase initialized successfully');
     } catch (e) {
       if (e.toString().contains('duplicate-app')) {
-        print('Firebase already initialized, continuing...');
+        Logger.info('Firebase already initialized, continuing...');
       } else {
-        print('Firebase initialization error: $e');
+        Logger.error('Firebase initialization error', e);
       }
     }
     
     // Initialize notification service with error handling
     try {
-      print('Initializing notification service...');
+      Logger.info('Initializing notification service...');
       await NotificationService().initialize();
-      print('Notification service initialized successfully');
+      Logger.success('Notification service initialized successfully');
     } catch (e) {
-      print('Warning: Notification service failed to initialize: $e');
+      Logger.warning('Notification service failed to initialize: $e');
     }
     
-    print('Running app...');
+    Logger.info('Running app...');
     runApp(
       ProviderScope(
         child: MyApp(),
       ),
     );
   } catch (e) {
-    print('Error during app initialization: $e');
+    Logger.error('Error during app initialization', e);
     // Still run the app even if there's an error
     runApp(
       ProviderScope(

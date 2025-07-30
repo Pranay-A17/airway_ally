@@ -236,10 +236,14 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
       });
       return;
     }
+    
+    // Store context before async operation
+    final navigator = Navigator.of(context, rootNavigator: true);
+    
     try {
       final updatedUser = widget.user.copyWith(name: name, email: email, role: _role);
       await widget.ref.read(authProvider.notifier).updateUserProfile(updatedUser);
-      Navigator.of(context, rootNavigator: true).pop();
+      navigator.pop();
       widget.onSuccess?.call();
     } catch (e) {
       setState(() {

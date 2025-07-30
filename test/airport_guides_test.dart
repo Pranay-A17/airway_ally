@@ -46,7 +46,7 @@ void main() {
       };
 
       await tester.pumpWidget(
-        const ProviderScope(
+        ProviderScope(
           child: MaterialApp(
             home: AirportDetailPage(airport: testAirport),
           ),
@@ -72,7 +72,7 @@ void main() {
       };
 
       await tester.pumpWidget(
-        const ProviderScope(
+        ProviderScope(
           child: MaterialApp(
             home: AirportDetailPage(airport: testAirport),
           ),
@@ -97,7 +97,7 @@ void main() {
       };
 
       await tester.pumpWidget(
-        const ProviderScope(
+        ProviderScope(
           child: MaterialApp(
             home: AirportDetailPage(airport: testAirport),
           ),
@@ -123,7 +123,7 @@ void main() {
       };
 
       await tester.pumpWidget(
-        const ProviderScope(
+        ProviderScope(
           child: MaterialApp(
             home: AirportDetailPage(airport: testAirport),
           ),

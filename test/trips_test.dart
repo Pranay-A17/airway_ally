@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:airway_ally/features/trips/my_trips_page.dart';
 import 'package:airway_ally/features/trips/track_flight_page.dart';
-import 'package:airway_ally/models/trip_model.dart';
 
 void main() {
   group('Trips Tests', () {

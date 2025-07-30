@@ -146,7 +146,7 @@ class ChatPage extends ConsumerWidget {
                     );
                   },
                 ),
-              )).toList(),
+              )),
             ],
           );
         },
@@ -292,13 +292,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     _messageController.clear();
     _scrollToBottom();
 
+    // Store context before async operation
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     try {
       await _chatService.sendMessage(
         conversationId: widget.conversationId,
         text: text,
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessenger.showSnackBar(
         SnackBar(content: Text('Failed to send message: $e')),
       );
     }

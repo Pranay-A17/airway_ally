@@ -268,7 +268,7 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
     }
     
     return CircleAvatar(
-      backgroundColor: color.withOpacity(0.1),
+      backgroundColor: color.withValues(alpha: 0.1),
       child: Icon(iconData, color: color),
     );
   }
@@ -359,13 +359,16 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
   }
 
   void _deleteDocument(Map<String, dynamic> document) async {
+    // Store context before async operation
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    
     try {
       await _documentsService.deleteDocument(document['id'] as String? ?? '');
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessenger.showSnackBar(
         const SnackBar(content: Text('Document deleted successfully')),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessenger.showSnackBar(
         SnackBar(content: Text('Failed to delete document: $e')),
       );
     }
@@ -484,16 +487,19 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
       _isUploading = true;
     });
 
+    // Store context before async operation
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     try {
       // Simulate upload process
       await Future.delayed(const Duration(seconds: 2));
       
       // Document upload is handled by the real-time stream
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessenger.showSnackBar(
         const SnackBar(content: Text('Document uploaded successfully!')),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessenger.showSnackBar(
         SnackBar(content: Text('Failed to upload document: $e')),
       );
     } finally {

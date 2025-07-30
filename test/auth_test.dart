@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:airway_ally/features/auth/auth_screen.dart';
-import 'package:airway_ally/providers/auth_provider.dart';
 
 void main() {
   group('Authentication Tests', () {

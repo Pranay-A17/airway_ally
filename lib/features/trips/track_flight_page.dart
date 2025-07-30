@@ -221,7 +221,7 @@ class _TrackFlightPageState extends ConsumerState<TrackFlightPage> {
     }
 
     return Card(
-      color: color.withOpacity(0.1),
+      color: color.withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Row(

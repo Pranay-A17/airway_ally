@@ -80,22 +80,26 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                 if (authState.value != null) {
                                   final user = authState.value!;
                                   final newUser = UserModel(
-                                    id: user.uid,
-                                    email: user.email ?? 'unknown@email.com',
-                                    name: user.displayName ?? user.email?.split('@')[0] ?? 'User',
+                                    id: user.id,
+                                    email: user.email,
+                                    name: user.name,
                                     role: 'seeker',
                                     createdAt: DateTime.now(),
                                     lastActive: DateTime.now(),
                                   );
                                   try {
                                     await ref.read(firestoreServiceProvider).createUser(newUser);
-                                    ScaffoldMessenger.of(context).showSnackBar(
+                                    // Store context before async operation
+                                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                                    scaffoldMessenger.showSnackBar(
                                       const SnackBar(content: Text('Profile created! Refreshing...')),
                                     );
                                     // Force refresh
                                     ref.invalidate(currentUserProvider);
                                   } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
+                                    // Store context before async operation
+                                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                                    scaffoldMessenger.showSnackBar(
                                       SnackBar(content: Text('Error: $e')),
                                     );
                                   }
